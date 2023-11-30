@@ -91,6 +91,39 @@ def Basic_clauses(cnf, vpool, k, alphabet, P, N):
                 ORCLAUSE.append(outcnf)
     P_clauses(cnf, vpool, k, P)
     N_clauses(cnf, vpool, k, N)
+def create_automate(model, vpool, alphabet, k):
+    variable_values = dict()
+    for literal in model:
+        variable = abs(literal)
+        value = literal > 0
+        variable_name = vpool.obj(variable)  # Convert variable ID back to name
+        variable_values[variable_name] = value
+    states = set()
+    states.add("q0")
+    for i in range(1,k):
+        if variable_values[vpool.id(f"etat{i}")]:
+            states.add(f"q{i}")
+    transitions = set()
+    for i in range(k):
+        for j in range(k):
+            for letter in alphabet:
+                if variable_values[vpool.id(f"etat{i}_to_etat{j}_with_{letter}")]:
+                    if f"q{i}" in transitions:
+                        transitions[f"q{i}"][letter] = f"q{j}"
+                    else:
+                        transitions[f"q{i}"] = {letter:f"q{j}"}
+    finals = set()
+    for i in range(k):
+        if variable_values[vpool.id(f"etat{i}_is_final")]:
+            finals.add(f"q{i}")
+    automaton = DFA(
+        states=states,
+        input_symbols={char for char in alphabet},
+        transitions=transitions,
+        initial_state='q0',
+        final_states=finals,
+    )
+    return automaton
 # Q2
 
 
@@ -105,6 +138,17 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
             for letter in alphabet:
                 vpool.id(f"etat{i}_to_etat{j}_with_{letter}")# create a possible link with each state
     Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
+    # Create a SAT solver
+    solver = Minisat22()
+
+    # Add clauses to the solver
+    for clause in cnf:
+        solver.add_clause(clause)
+
+    # Solve the SAT problem
+    if solver.solve():
+        model = solver.get_model()
+        create_automate(model, vpool, alphabet, k)
 
 
 
