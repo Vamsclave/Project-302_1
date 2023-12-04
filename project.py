@@ -5,6 +5,7 @@ from automata.fa.fa import FA
 from automata.fa.dfa import DFA
 from automata.fa.nfa import NFA
 from itertools import product
+import copy
 from pysat.solvers import Minisat22, Minicard
 from pysat.formula import CNF, CNFPlus, IDPool
 def P_clauses(cnf, vpool, k, P):
@@ -16,19 +17,22 @@ def P_clauses(cnf, vpool, k, P):
             if len(start_node[1]) != 0 :
                 new_alpha = start_node[1][1:]
                 for i in range(k):
-                    nodes_list.append((start_node[0].append(i), new_alpha))
+                    node = list(start_node[0])
+                    node.append(i)
+                    nodes_list.append((node , new_alpha))
             else:
                 finished_node.append(start_node[0])
-    compiled_node = []
-    for possibility in finished_node:
-        poss = []
-        for i in range(len(word)):
-            poss.append(vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}"))
-        poss.append(vpool.id(f"etat{possibility[len(word)]}_is_final"))
-        compiled_node.append(poss)
-    result = list(product(*compiled_node))
-    for possibility in result:
-        cnf.append(possibility)
+        compiled_node = []
+        for possibility in finished_node:
+            poss = set()
+            for i in range(len(word)):
+                if vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}") not in poss:
+                    poss.add(vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}"))
+            poss.add(vpool.id(f"etat{possibility[len(word)]}_is_final"))
+            if poss not in compiled_node:
+              compiled_node.append(poss)
+        for possibility in product(*compiled_node):
+            cnf.append(list(possibility))
 def N_clauses(cnf, vpool, k, N):
     for word in N:
         nodes_list = [([0],word)]
@@ -38,7 +42,9 @@ def N_clauses(cnf, vpool, k, N):
             if len(start_node[1]) != 0 :
                 new_alpha = start_node[1][1:]
                 for i in range(k):
-                    nodes_list.append((start_node[0].append(i), new_alpha))
+                    node = list(start_node[0])
+                    node.append(i)
+                    nodes_list.append((node , new_alpha))
             else:
                 finished_node.append(start_node[0])
         # not possibility AND  possibility  AND ... AND not possibility
@@ -79,8 +85,11 @@ def Basic_clauses(cnf, vpool, k, alphabet, P, N):
                         ORCLAUSE.append(-vpool.id(f"etat{i}_to_etat{j}_with_{letter}"))
                         ORCLAUSE.append(-vpool.id(f"etat{i}_to_etat{l}_with_{letter}"))
                         cnf.append(ORCLAUSE)
-    P_clauses(cnf, vpool, k, P)
+    print("basic clause adding")
     N_clauses(cnf, vpool, k, N)
+    print("N adding")
+    P_clauses(cnf, vpool, k, P)
+    print("P adding")
 def create_automate(model, vpool, alphabet, k):
     variable_values = dict()
     for literal in model:
@@ -91,20 +100,20 @@ def create_automate(model, vpool, alphabet, k):
     states = set()
     states.add("q0")
     for i in range(1,k):
-        if variable_values[vpool.id(f"etat{i}")]:
+        if variable_values[f"etat{i}"]:
             states.add(f"q{i}")
-    transitions = set()
+    transitions = dict()
     for i in range(k):
         for j in range(k):
             for letter in alphabet:
-                if variable_values[vpool.id(f"etat{i}_to_etat{j}_with_{letter}")]:
+                if variable_values[f"etat{i}_to_etat{j}_with_{letter}"]:
                     if f"q{i}" in transitions:
                         transitions[f"q{i}"][letter] = f"q{j}"
                     else:
                         transitions[f"q{i}"] = {letter:f"q{j}"}
     finals = set()
     for i in range(k):
-        if variable_values[vpool.id(f"etat{i}_is_final")]:
+        if variable_values[f"etat{i}_is_final"]:
             finals.add(f"q{i}")
     automaton = DFA(
         states=states,
@@ -127,8 +136,10 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
         for j in range(k):
             for letter in alphabet:
                 vpool.id(f"etat{i}_to_etat{j}_with_{letter}")# create a possible link with each state
+    print("variable created")
     Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
     # Create a SAT solver
+    print("basic litteral created")
     solver = Minisat22()
 
     # Add clauses to the solver
@@ -138,8 +149,8 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     # Solve the SAT problem
     if solver.solve():
         model = solver.get_model()
-        create_automate(model, vpool, alphabet, k)
-
+        automate = create_automate(model, vpool, alphabet, k)
+        show_automaton(automate)
 
 
 # Q3
@@ -187,4 +198,4 @@ def f():
     cnf.append(ORclause)
 
 if __name__ == '__main__':
-    f()
+    main()
