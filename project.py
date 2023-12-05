@@ -8,6 +8,8 @@ from itertools import product
 import copy
 from pysat.solvers import Minisat22, Minicard
 from pysat.formula import CNF, CNFPlus, IDPool
+
+# Q2
 def P_clauses(cnf, vpool, k, P):
     for word in P:
         nodes_list = [([0],word)]
@@ -123,9 +125,6 @@ def create_automate(model, vpool, alphabet, k):
         final_states=finals,
     )
     return automaton
-# Q2
-
-
 
 def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     vpool = IDPool()
@@ -145,29 +144,136 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     # Add clauses to the solver
     for clause in cnf:
         solver.add_clause(clause)
-
+    print("litteral added to solver")
     # Solve the SAT problem
     if solver.solve():
         model = solver.get_model()
         automate = create_automate(model, vpool, alphabet, k)
         show_automaton(automate)
-
+        print("automate created")
+        return automate
 
 # Q3
+def minimal_node_clauses(cnf, vpool, k, alphabet):
+        ORCLAUSE = []
+        for i in range(1,k):
+            ORCLAUSE.append(-vpool.id(f"etat{i}"))
+            for j in range(k):
+                for letter in alphabet:
+                    ORCLAUSE.append(vpool.id(f"etat{j}_to_etat{i}_with_{letter}"))
+            cnf.append(ORCLAUSE)
+
 def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
-    # À COMPLÉTER
-    pass
+    maximum = 0
+    for i in pos:
+        maximum = max(len(i),maximum)
+    for i in neg:
+        maximum = max(len(i),maximum)
+    k = maximum + 1
+    while( k != 30):
+        vpool = IDPool()
+        cnf = CNF()
+        for i in range(k):
+            vpool.id(f"etat{i}")  # create k state form 0 to k-1
+            vpool.id(f"etat{i}_is_final")  # create booleen to express if a state is final
+            for j in range(k):
+                for letter in alphabet:
+                    vpool.id(f"etat{i}_to_etat{j}_with_{letter}")  # create a possible link with each state
+        print("variable created")
+        Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
+        minimal_node_clauses(cnf, vpool, k, alphabet)
+        # Create a SAT solver
+        print("basic litteral created")
+        solver = Minisat22()
+        # Add clauses to the solver
+        for clause in cnf:
+            solver.add_clause(clause)
+        print("litteral added to solver")
+        # Solve the SAT problem
+        if solver.solve():
+            model = solver.get_model()
+            automate = create_automate(model, vpool, alphabet, k)
+            show_automaton(automate)
+            print("automate created")
+            return automate
+        else:
+            k+=1
+            print("restart")
 
 # Q4
+def complet_automate(cnf, vpool, k , alphabet):
+    for i in range(k):
+        for letter in alphabet:
+            ORCLAUSE = []
+            ORCLAUSE.append(-vpool.id(f"etat{i}"))
+            for j in range(k):
+                ORCLAUSE.append(vpool.id(f"etat{i}_to_etat{j}_with_{letter}"))
+            cnf.append(ORCLAUSE)
+
 def gen_autc(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
-    # À COMPLÉTER
-    pass
+    vpool = IDPool()
+    cnf = CNF()
+    for i in range(k):
+        vpool.id(f"etat{i}")  # create k state form 0 to k-1
+        vpool.id(f"etat{i}_is_final")  # create booleen to express if a state is final
+        for j in range(k):
+            for letter in alphabet:
+                vpool.id(f"etat{i}_to_etat{j}_with_{letter}")  # create a possible link with each state
+    print("variable created")
+    Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
+    complet_automate(cnf, vpool, k, alphabet)
+    # Create a SAT solver
+    print("basic litteral created")
+    solver = Minisat22()
+    # Add clauses to the solver
+    for clause in cnf:
+        solver.add_clause(clause)
+    print("litteral added to solver")
+    # Solve the SAT problem
+    if solver.solve():
+        model = solver.get_model()
+        automate = create_automate(model, vpool, alphabet, k)
+        show_automaton(automate)
+        print("automate created")
+        return automate
 
 # Q5
+def reversible_clauses(cnf, vpool, k, alphabet):
+    for i in range(k):
+        for j in range(k):
+            for letter in alphabet:
+                for l in range(k):
+                    if l!=i:
+                        cnf.append([-vpool.id(f"etat{i}_to_etat{j}_with_{letter}"), -vpool.id(f"etat{l}_to_etat{j}_with_{letter}")])
+
 def gen_autr(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     # À COMPLÉTER
     pass
-
+    vpool = IDPool()
+    cnf = CNF()
+    for i in range(k):
+        vpool.id(f"etat{i}")  # create k state form 0 to k-1
+        vpool.id(f"etat{i}_is_final")  # create booleen to express if a state is final
+        for j in range(k):
+            for letter in alphabet:
+                vpool.id(f"etat{i}_to_etat{j}_with_{letter}")  # create a possible link with each state
+    print("variable created")
+    Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
+    reversible_clauses(cnf, vpool, k, alphabet)
+    # Create a SAT solver
+    print("basic litteral created")
+    solver = Minisat22()
+    # Add clauses to the solver
+    for clause in cnf:
+        solver.add_clause(clause)
+    print("litteral added to solver")
+    # Solve the SAT problem
+    if solver.solve():
+        model = solver.get_model()
+        automate = create_automate(model, vpool, alphabet, k)
+        show_automaton(automate)
+        print("automate created")
+        return automate
 # Q6
 def gen_autcard(alphabet: str, pos: list[str], neg: list[str], k: int, ell: int) -> DFA:
     # À COMPLÉTER
@@ -185,17 +291,6 @@ def main():
     test_autr()
     test_autcard()
     test_autn()
-def f():
-    cnf = CNF()
-    incnf = CNF()
-    incnf.append([1,2,3])
-    outcnf = CNF()
-    outcnf.append([4,5,6])
-    ORclause = []
-    ORclause.append(incnf)
-    ORclause.append(outcnf)
-    # ((a AND b) or (c AND d)) and ((a AND b) or (c AND d))
-    cnf.append(ORclause)
 
 if __name__ == '__main__':
     main()
