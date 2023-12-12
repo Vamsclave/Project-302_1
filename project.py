@@ -2,7 +2,7 @@
 # Groupe :
 # - Xu ze-xuan 541818
 # - Ibrahim Maatoug 326598
-# -
+# - Melnic Alexandru 543831
 # Description :
 #   Creating function that use Pysat and Automata to get the structure of automate that
 # respect some conditions and use this structure to create an automate and save the image
@@ -22,6 +22,7 @@ from pysat.formula import CNF, CNFPlus, IDPool
 def wrong_clause_remover(finished_node, word):
     """
     Function to remove wrong clause that cannot be satisfied in a dfa
+    Used to reduce the time it take for the clause for P
     :param finished_node:
     list of states which form a path from the first state in the list to the last state
     :param word:
@@ -44,6 +45,7 @@ def wrong_clause_remover(finished_node, word):
         if Good_node:
             right_node.append(node)
     return right_node
+
 def P_clauses(cnf, vpool, k, P):
     """
     add clauses for each word in P to cnf to be accepted by the automate
@@ -59,6 +61,7 @@ def P_clauses(cnf, vpool, k, P):
     None
     """
     for word in P:
+        # getting a list with all possibility of path with a word
         nodes_list = [([0],word)]
         finished_node = []
         while len(nodes_list) != 0:
@@ -71,7 +74,9 @@ def P_clauses(cnf, vpool, k, P):
                     nodes_list.append((node , new_alpha))
             else:
                 finished_node.append(start_node[0])
-        #finished_node = wrong_clause_remover(finished_node, word)
+        # removing useless clause
+        finished_node = wrong_clause_remover(finished_node, word)
+        # turn the all possibility into Vpool format
         compiled_node = []
         for possibility in finished_node:
             poss = set()
@@ -81,8 +86,10 @@ def P_clauses(cnf, vpool, k, P):
             poss.add(vpool.id(f"etat{possibility[len(word)]}_is_final"))
             if poss not in compiled_node:
               compiled_node.append(poss)
+        # turn the dnf to cnf
         final_or_nodes = product(*compiled_node)
         for possibility in final_or_nodes:
+            # add all clause in the cnf list
             cnf.append(list(possibility))
 def N_clauses(cnf, vpool, k, N):
     """
@@ -99,6 +106,7 @@ def N_clauses(cnf, vpool, k, N):
         None
         """
     for word in N:
+        #getting a list with all possibility of path with a word
         nodes_list = [([0],word)]
         finished_node = []
         while len(nodes_list) != 0:
@@ -111,15 +119,13 @@ def N_clauses(cnf, vpool, k, N):
                     nodes_list.append((node , new_alpha))
             else:
                 finished_node.append(start_node[0])
-        # not possibility AND  possibility  AND ... AND not possibility
+        # adding the clause to the cnf
         for possibility in finished_node:
-            #  not t(q0,qi,a) OR not t(qi,qj,b) OR .... OR not F(qk)
             ORClause = []
             for i in range(len(word)):
                 ORClause.append(-vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}"))
             ORClause.append(-vpool.id(f"etat{possibility[len(word)]}_is_final"))
             cnf.append(ORClause)
-        # adding clause for each word
 def Basic_clauses(cnf, vpool, k, alphabet, P, N):
     """
     add all basic clause from question 1 to the automate
@@ -138,6 +144,7 @@ def Basic_clauses(cnf, vpool, k, alphabet, P, N):
     :return:
     None
     """
+    # adding the initial state
     cnf.append([vpool.id("etat0")])
     # F(qi) -> qi
     for i in range(1, k):
@@ -166,11 +173,11 @@ def Basic_clauses(cnf, vpool, k, alphabet, P, N):
                         ORCLAUSE.append(-vpool.id(f"etat{i}_to_etat{j}_with_{letter}"))
                         ORCLAUSE.append(-vpool.id(f"etat{i}_to_etat{l}_with_{letter}"))
                         cnf.append(ORCLAUSE)
-    print("basic clause adding")
+    print("basic clause added")
     N_clauses(cnf, vpool, k, N)
-    print("N adding")
+    print("N added")
     P_clauses(cnf, vpool, k, P)
-    print("P adding")
+    print("P added")
 def create_automate(model, vpool, alphabet, k):
     """
     Create the automate
@@ -185,17 +192,20 @@ def create_automate(model, vpool, alphabet, k):
     :return:
      a deterministic finite automate
     """
+    # make the answear readable by turning it back to string
     variable_values = dict()
     for literal in model:
         variable = abs(literal)
         value = literal > 0
         variable_name = vpool.obj(variable)  # Convert variable ID back to name
         variable_values[variable_name] = value
+    #get states from the answear
     states = set()
     states.add("q0")
     for i in range(1,k):
         if variable_values[f"etat{i}"]:
             states.add(f"q{i}")
+    # get transitions from the answear
     transitions = dict()
     for i in range(k):
         for j in range(k):
@@ -205,10 +215,12 @@ def create_automate(model, vpool, alphabet, k):
                         transitions[f"q{i}"][letter] = f"q{j}"
                     else:
                         transitions[f"q{i}"] = {letter:f"q{j}"}
+    # get finals states from the answear
     finals = set()
     for i in range(k):
         if variable_values[f"etat{i}_is_final"]:
             finals.add(f"q{i}")
+    #create the automate
     automaton = DFA(
         states=states,
         input_symbols={char for char in alphabet},
@@ -231,7 +243,7 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     :param k:
     max number of states
     :return:
-    the asked automate
+    the asked automate or None
     """
     vpool = IDPool()
     cnf = CNF()
@@ -244,7 +256,7 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     print("variable created")
     Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
     # Create a SAT solver
-    print("basic litteral created")
+    print("basic litteral added")
     solver = Minisat22()
 
     # Add clauses to the solver
@@ -296,12 +308,14 @@ def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
     :return:
     the asked automate
     """
+    # get k from the word
     maximum = 0
     for i in pos:
         maximum = max(len(i),maximum)
     for i in neg:
         maximum = max(len(i),maximum)
     k = maximum + 1
+    # IN case k states is not enought
     while( k != 30):
         vpool = IDPool()
         cnf = CNF()
@@ -315,7 +329,7 @@ def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
         Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
         minimal_node_clauses(cnf, vpool, k, alphabet)
         # Create a SAT solver
-        print("basic litteral created")
+        print("basic litteral added")
         solver = Minisat22()
         # Add clauses to the solver
         for clause in cnf:
@@ -364,8 +378,10 @@ def gen_autc(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     list of word to be accepted that need to be turned into clauses
     :param neg:
     list of word to be rejected that need to be turned into clauses
+    :param k:
+    max number of states
     :return:
-    the asked automate
+    the asked automate or None
     """
     vpool = IDPool()
     cnf = CNF()
@@ -379,7 +395,7 @@ def gen_autc(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
     complet_automate(cnf, vpool, k, alphabet)
     # Create a SAT solver
-    print("basic litteral created")
+    print("basic litteral added")
     solver = Minisat22()
     # Add clauses to the solver
     for clause in cnf:
@@ -417,15 +433,17 @@ def reversible_clauses(cnf,vpool, k, alphabet):
 
 def gen_autr(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     """
-    get a reversible consistant automate that accept word from pos and reject word from neg with maximum number k of states
+    get a reversible consistant automate that accept word from pos and reject word from neg with maximum number k of states 
     :param alphabet:
     String that contains all possible letter used for translations
     :param pos:
     list of word to be accepted that need to be turned into clauses
     :param neg:
     list of word to be rejected that need to be turned into clauses
+    :param k:
+    max number of states
     :return:
-    the asked automate
+    the asked automate or None
     """
     vpool = IDPool()
     cnf = CNF()
@@ -439,7 +457,7 @@ def gen_autr(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
     Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
     reversible_clauses(cnf, vpool, k, alphabet)
     # Create a SAT solver
-    print("basic litteral created")
+    print("basic litteral added")
     solver = Minisat22()
     # Add clauses to the solver
     for clause in cnf:
@@ -454,11 +472,41 @@ def gen_autr(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
         return automate
 # Q6
 def lesser_final(cnf, vpool, k, alphabet, l):
+    """
+    adding clause that restrict the number of finals states with maximum number set to l
+    :param cnf:
+    the cnf used to contain all clauses of the automate
+    :param vpool:
+    used to store the id of each variable
+    :param k: 
+    max number of states
+    :param alphabet: 
+    String that contains all possible letter used for translations
+    :param l: 
+    max number of finals states
+    :return: 
+    """
     ORCLAUSE = []
     for i in range(k):
         ORCLAUSE.append(vpool.id(f"etat{i}_is_final")) # create k state form 0 to k-1
     cnf.append([ORCLAUSE, l], is_atmost=True)
 def gen_autcard(alphabet: str, pos: list[str], neg: list[str], k: int, ell: int) -> DFA:
+    """
+    get a consistant automate that accept word from pos and reject word from neg with maximum number k of states
+    and maximum number ell of finals states
+    :param alphabet:
+    String that contains all possible letter used for translations
+    :param pos:
+    list of word to be accepted that need to be turned into clauses
+    :param neg:
+    list of word to be rejected that need to be turned into clauses
+    :param k:
+    max number of states
+    :param ell:
+    max number of finals states
+    :return:
+    the asked automate or None
+    """
     vpool = IDPool()
     cnf = CNFPlus()
     for i in range(k):
@@ -472,7 +520,7 @@ def gen_autcard(alphabet: str, pos: list[str], neg: list[str], k: int, ell: int)
     complet_automate(cnf, vpool, k, alphabet)
     lesser_final(cnf, vpool, k, alphabet, ell)
     # Create a SAT solver
-    print("basic litteral created")
+    print("basic litteral added")
     solver = Minicard()
     # Add clauses to the solver
     for clause in cnf.clauses:
@@ -489,9 +537,51 @@ def gen_autcard(alphabet: str, pos: list[str], neg: list[str], k: int, ell: int)
         return automate
 
 # Q7
+def P_clauses_nfa(cnf, vpool, k, P):
+    """
+    add clauses for each word in P to cnf to be accepted by the automate
+    :param cnf:
+    the cnf used to contain all clauses of the automate
+    :param vpool:
+    used to store the id of each variable
+    :param k:
+    max number of states
+    :param P:
+    list of word to be accepted that need to be turned into clauses
+    :return:
+    None
+    """
+    for word in P:
+        # getting a list with all possibility of path with a word
+        nodes_list = [([0],word)]
+        finished_node = []
+        while len(nodes_list) != 0:
+            start_node = nodes_list.pop(0)
+            if len(start_node[1]) != 0 :
+                new_alpha = start_node[1][1:]
+                for i in range(k):
+                    node = list(start_node[0])
+                    node.append(i)
+                    nodes_list.append((node , new_alpha))
+            else:
+                finished_node.append(start_node[0])
+        # turn all possibility into Vpool format
+        compiled_node = []
+        for possibility in finished_node:
+            poss = set()
+            for i in range(len(word)):
+                if vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}") not in poss:
+                    poss.add(vpool.id(f"etat{possibility[i]}_to_etat{possibility[i+1]}_with_{word[i]}"))
+            poss.add(vpool.id(f"etat{possibility[len(word)]}_is_final"))
+            if poss not in compiled_node:
+              compiled_node.append(poss)
+        #turn dnf into cnf
+        final_or_nodes = product(*compiled_node)
+        for possibility in final_or_nodes:
+            cnf.append(list(possibility))
 def Basic_clauses_nfa(cnf, vpool, k, alphabet, P, N):
     """
-    add all basic clause from question 1 to the automate
+    add all basic clause except of transitions from question 1 to the automate
     :param cnf:
     the cnf used to contain all clauses of the automate
     :param vpool:
@@ -507,6 +597,7 @@ def Basic_clauses_nfa(cnf, vpool, k, alphabet, P, N):
     :return:
     None
     """
+    # adding initial state
     cnf.append([vpool.id("etat0")])
     # F(qi) -> qi
     for i in range(1, k):
@@ -515,9 +606,7 @@ def Basic_clauses_nfa(cnf, vpool, k, alphabet, P, N):
     for i in range(k):
         for j in range(k):
             for letter in alphabet:
-                # (AND all letter(-t(qi,qj,a) AND -t(qj,qi,a))) V (qi AND qj)
                 ORCLAUSE = []
-                # (qi and qj)
                 ORCLAUSE.append(vpool.id(f"etat{i}"))
                 ORCLAUSE.append(-vpool.id(f"etat{i}_to_etat{j}_with_{letter}"))
                 cnf.append(ORCLAUSE)
@@ -528,7 +617,7 @@ def Basic_clauses_nfa(cnf, vpool, k, alphabet, P, N):
     print("basic clause adding")
     N_clauses(cnf, vpool, k, N)
     print("N adding")
-    P_clauses(cnf, vpool, k, P)
+    P_clauses_nfa(cnf, vpool, k, P)
     print("P adding")
 
 def create_automate_nfa(model, vpool, alphabet, k):
@@ -545,17 +634,20 @@ def create_automate_nfa(model, vpool, alphabet, k):
     :return:
      a no-deterministic finite automate
     """
+    #turn the answear into a dictionnary of readable String with booleen as value
     variable_values = dict()
     for literal in model:
         variable = abs(literal)
         value = literal > 0
         variable_name = vpool.obj(variable)  # Convert variable ID back to name
         variable_values[variable_name] = value
+    # adding states from answear
     states = set()
     states.add("q0")
     for i in range(1, k):
         if variable_values[f"etat{i}"]:
             states.add(f"q{i}")
+    # adding transitions from answear
     transitions = dict()
     for i in range(k):
         for j in range(k):
@@ -568,10 +660,12 @@ def create_automate_nfa(model, vpool, alphabet, k):
                             transitions[f"q{i}"][letter] = {f"q{j}"}
                     else:
                         transitions[f"q{i}"] = {letter: {f"q{j}"}}
+    # adding finals from answear
     finals = set()
     for i in range(k):
         if variable_values[f"etat{i}_is_final"]:
             finals.add(f"q{i}")
+    # create non deterministic automate
     automaton = NFA(
         states=states,
         input_symbols={char for char in alphabet},
@@ -581,6 +675,19 @@ def create_automate_nfa(model, vpool, alphabet, k):
     )
     return automaton
 def gen_autn(alphabet: str, pos: list[str], neg: list[str], k: int) -> NFA:
+    """
+       get a non deterministe automate that accept word from pos and reject word from neg with maximum number k of states
+       :param alphabet:
+       String that contains all possible letter used for translations
+       :param pos:
+       list of word to be accepted that need to be turned into clauses
+       :param neg:
+       list of word to be rejected that need to be turned into clauses
+       :param k:
+       max number of states
+       :return:
+       the asked automate or None
+       """
     vpool = IDPool()
     cnf = CNF()
     # adding clauses
@@ -593,7 +700,7 @@ def gen_autn(alphabet: str, pos: list[str], neg: list[str], k: int) -> NFA:
     print("variable created")
     Basic_clauses_nfa(cnf, vpool, k, alphabet, pos, neg)
     # Create a SAT solver
-    print("basic litteral created")
+    print("basic litteral added")
     solver = Minicard()
     # Add clauses to the solver
     for clause in cnf.clauses:
@@ -608,11 +715,11 @@ def gen_autn(alphabet: str, pos: list[str], neg: list[str], k: int) -> NFA:
         return automate
 
 def main():
-    #test_aut()
-    #test_minaut()
-    #test_autc()
-    #test_autr()
-    #test_autcard()
+    test_aut()
+    test_minaut()
+    test_autc()
+    test_autr()
+    test_autcard()
     test_autn()
 
 if __name__ == '__main__':
