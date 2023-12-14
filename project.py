@@ -274,28 +274,6 @@ def gen_aut(alphabet: str, pos: list[str], neg: list[str], k: int) -> DFA:
         conflict = solver.get_core()
         print(conflict)
 # Q3
-def minimal_node_clauses(cnf, vpool, k, alphabet):
-    """
-    add clauses to the cnf for having only usefull state.
-    :param cnf:
-    the cnf used to contain all clauses of the automate
-    :param vpool:
-    used to store the id of each variable
-    :param k:
-     max number of states
-    :param alphabet:
-    String that contains all possible letter used for translations
-    :return:
-    None
-    """
-    for i in range(k):
-        ORCLAUSE = []
-        ORCLAUSE.append(-vpool.id(f"etat{i}"))
-        for l in range(k):
-            for letter in alphabet:
-                ORCLAUSE.append(vpool.id(f"etat{l}_to_etat{i}_with_{letter}"))
-        cnf.append(ORCLAUSE)
-
 def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
     """
     get a consistant automate that accept word from pos and reject word from neg with the smallest number of states
@@ -314,9 +292,12 @@ def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
         maximum = max(len(i),maximum)
     for i in neg:
         maximum = max(len(i),maximum)
-    k = maximum + 1
+    h = maximum
+    n = len(alphabet)
+    N = (n^(h+1)-1)/(n-1)
+    k = 1
     # IN case k states is not enought
-    while( k != 30):
+    while( k != N+1):
         vpool = IDPool()
         cnf = CNF()
         for i in range(k):
@@ -327,7 +308,6 @@ def gen_minaut(alphabet: str, pos: list[str], neg: list[str]) -> DFA:
                     vpool.id(f"etat{i}_to_etat{j}_with_{letter}")  # create a possible link with each state
         print("variable created")
         Basic_clauses(cnf, vpool, k, alphabet, pos, neg)
-        minimal_node_clauses(cnf, vpool, k, alphabet)
         # Create a SAT solver
         print("basic litteral added")
         solver = Minisat22()
